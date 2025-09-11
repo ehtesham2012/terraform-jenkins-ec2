@@ -59,11 +59,12 @@ resource "aws_instance" "jenkins_server" {
 
   user_data = <<-EOF
               #!/bin/bash
+              sudo su
               set -e
               yum update -y
-              yum install -y java-1.8.0-openjdk
-              curl -fsSL https://pkg.jenkins.io/redhat-stable/jenkins.repo -o /etc/yum.repos.d/jenkins.repo
-              rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io.key
+              dnf install -y java-17-amazon-corretto-headless
+              wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat/jenkins.repo
+              rpm --import https://pkg.jenkins.io/redhat/jenkins.io-2023.key
               yum install -y jenkins
               systemctl enable --now jenkins
               EOF
