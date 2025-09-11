@@ -2,9 +2,16 @@ provider "aws" {
   region = var.aws_region
 }
 
+locals {
+  jenkins_vpc_id   = "vpc-0a720d6537e05bc03"
+  public_subnet_id = "subnet-0a977f57c7180c12b"
+  public_rtb_id    = "rtb-0e43a2b517662fc9e"
+}
+
 resource "aws_security_group" "jenkins_sg" {
   name        = "jenkins_sg"
   description = "Allow SSH and HTTP"
+  vpc_id      = local.jenkins_vpc_id
 
   ingress {
     description = "SSH"
@@ -28,23 +35,37 @@ resource "aws_security_group" "jenkins_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = {
+    Name = "JenkinsSG"
+  }
+}
+
+# Optional: manage the association to ensure subnet stays public
+# Comment out if association is owned elsewhere to avoid conflicts
+resource "aws_route_table_association" "public_assoc" {
+  subnet_id      = local.public_subnet_id
+  route_table_id = local.public_rtb_id
 }
 
 resource "aws_instance" "jenkins_server" {
-  ami                    = "ami-0861f4e788f5069dd"
-  instance_type          = var.instance_type
-  key_name               = var.key_name
-  security_groups        = [aws_security_group.jenkins_sg.name]
+  ami                         = "ami-0861f4e788f5069dd"
+  instance_type               = var.instance_type
+  key_name                    = var.key_name
+  subnet_id                   = local.public_subnet_id
+  associate_public_ip_address = true
+
+  vpc_security_group_ids = [aws_security_group.jenkins_sg.id]
 
   user_data = <<-EOF
               #!/bin/bash
-              sudo yum update -y
-              sudo yum install java-1.8.0-openjdk -y
-              wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
+              set -e
+              yum update -y
+              yum install -y java-1.8.0-openjdk
+              curl -fsSL https://pkg.jenkins.io/redhat-stable/jenkins.repo -o /etc/yum.repos.d/jenkins.repo
               rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io.key
-              sudo yum install jenkins -y
-              sudo systemctl start jenkins
-              sudo systemctl enable jenkins
+              yum install -y jenkins
+              systemctl enable --now jenkins
               EOF
 
   tags = {
